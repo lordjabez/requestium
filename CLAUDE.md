@@ -28,7 +28,7 @@ Tests drive real Chrome and Firefox (Selenium Manager resolves drivers; CI sets 
 
 The suite is fully offline. `conftest.py` provides one `LocalServer` (stdlib `ThreadingHTTPServer`, one per xdist worker) that serves pages, records every request, and doubles as an HTTP forward proxy. Browsers and requests sessions are pointed at it as their proxy so tests can use realistic hostnames like `example.com` with real cookie-domain rules; add test pages with `server.add_page(...)` rather than starting another server. Two cases can't go through the proxy and use Chrome's `--host-resolver-rules` instead: the HTTPS listener for secure-cookie tests (needs `openssl` on PATH for a throwaway cert, skipped otherwise) and `localhost` cookie tests. Test files are split by functionality (`test_add_cookie.py`, `test_cookies.py` for transfers, `test_proxy.py`, etc.), not by source module.
 
-CI runs the matrix of Python 3.10 to 3.14 on Ubuntu, Windows, and macOS, each with `highest` and `lowest-direct` dependency resolution, so keep the minimum versions in `dependencies` honest.
+CI runs the matrix of Python 3.11 to 3.14 on Ubuntu, Windows, and macOS, each with `highest` and `lowest-direct` dependency resolution, so keep the minimum versions in `dependencies` honest.
 
 ## Architecture
 
