@@ -38,9 +38,7 @@ CI runs the matrix of Python 3.11 to 3.14 on Ubuntu, Windows, and macOS, each wi
   - With a user-supplied `driver` (Firefox, Remote, selenium-wire, etc.), the instance's `__class__` is swapped to a cached `type(..., (DriverMixin, cls), {})` subclass so it gains every helper, properties included.
   - `request()` (so every verb) records `_last_requests_url` (the default domain for `transfer_session_cookies_to_driver`) and wraps the result in `RequestiumResponse`; the per-verb stubs under `TYPE_CHECKING` exist only to narrow return types.
   - `close()` / `__exit__` quits the driver if one was started, including a user-supplied one.
-- `requestium_mixin.py` — `DriverMixin(RemoteWebDriver)`: `ensure_element` (wait for `present`/`clickable`/`visible`/`invisible`) plus `ensure_element_by_*` wrappers, `ensure_add_cookie` (navigates to the cookie's domain first, over https for `secure` cookies, and retries with the registrable domain via `tldextract`), and Parsel `xpath`/`css`/`re`/`re_first` over `page_source`. Elements returned by `ensure_element` get an `ensure_click` attribute (`_ensure_click`: scroll to center, retry click 10 times).
-- `requestium_response.py` — `RequestiumResponse` copies the wrapped response's `__dict__` and adds the same Parsel methods over `.text`.
+- `requestium_mixin.py` — `ensure_add_cookie` navigates to the cookie's domain first (over https for `secure` cookies) and retries with the registrable domain via `tldextract`.
 - `requestium.py` — back-compat shim re-exporting the above; tests import through `requestium.requestium`, so keep it.
-- `__init__.py` also re-exports Selenium's `By`, `Keys`, `Select`, and `exceptions` as public API.
 
 Parsing is never cached: each `xpath`/`css`/`re` call rebuilds a `Selector`, because page content or encoding may change between calls.
