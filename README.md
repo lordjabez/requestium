@@ -13,8 +13,6 @@ The library was created for writing web automation scripts that are written usin
 
 Requestium adds independent improvements to both Requests and Selenium, and every new feature is lazily evaluated, so its useful even if writing scripts that use only Requests or Selenium.
 
-Read more about the motivation behind creating this library in this [blog post](https://tryolabs.com/blog/2017/11/22/requestium-integration-layer-requests-selenium-web-automation/).
-
 ## Features
 
 - Enables switching between a Requests' Session and a Selenium webdriver while maintaining the current web session.
@@ -317,4 +315,6 @@ This project intends to be a drop-in replacement of Requests' Session object, wi
 
 
 ## License
-Copyright © 2018, [Tryolabs](https://tryolabs.com/). Released under the [BSD 3-Clause](https://github.com/lordjabez/requestium/blob/main/LICENSE).
+Copyright © 2017, [Tryolabs](https://tryolabs.com/). Copyright © 2022-2026, Judson Neer. Released under the [BSD 3-Clause](https://github.com/lordjabez/requestium/blob/main/LICENSE).
+
+Requestium was originally developed as an internal tool at Tryolabs and later released as open source. In 2026, Tryolabs transferred the project to Jud Neer, who maintains it independently. Tryolabs is not responsible for the project or for any release made after the transfer.
