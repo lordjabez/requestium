@@ -17,12 +17,13 @@ import urllib3.exceptions
 from _pytest.fixtures import FixtureRequest
 from selenium import webdriver
 from selenium.common import WebDriverException
-from selenium.webdriver import ChromeService
+from selenium.webdriver.chromium.service import ChromiumService
+from selenium.webdriver.remote.remote_connection import RemoteConnection
+from selenium.webdriver.remote.webdriver import WebDriver as RemoteWebDriver
 from selenium.webdriver.support import expected_conditions as EC  # noqa: N812
 from selenium.webdriver.support.wait import WebDriverWait
 
 import requestium
-import requestium.requestium_session
 
 if TYPE_CHECKING:
     from requestium.requestium_mixin import DriverMixin
@@ -222,24 +223,41 @@ def chrome_options(server: LocalServer, *, headless: bool, arguments: Sequence[s
     return options
 
 
-@pytest.fixture(autouse=True)
-def chromedriver_log(request: FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+# Commands normally get 120 seconds; a browser that hangs mid-test (seen on CI's macOS and Windows runners) should fail sooner.
+DRIVER_COMMAND_TIMEOUT = 30
+
+
+@pytest.fixture(scope="session", autouse=True)
+def driver_diagnostics() -> Generator[None, None, None]:
     """
-    When CHROMEDRIVER_LOG_DIR is set, give every ChromeDriver that requestium starts a verbose log named after the test.
+    Make browser hangs fail fast and, when CHROMEDRIVER_LOG_DIR is set, give every ChromeDriver a verbose log.
 
-    Chrome intermittently exits during startup on CI's macOS runners ("Chrome instance exited"), and only this log says why.
+    Chrome intermittently exits during startup or hangs on CI runners, and only ChromeDriver's log says why. Logs are named
+    after the test running when the driver started, so a module-scoped fixture's driver is logged under its first test.
     """
-    log_dir = os.environ.get("CHROMEDRIVER_LOG_DIR")
-    if not log_dir:
-        return
-    log_name = re.sub(r"[^\w.-]", "_", request.node.nodeid)
-    log_path = Path(log_dir) / f"{log_name}.log"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
+    original_start_session = RemoteWebDriver.start_session
+    original_service_init = ChromiumService.__init__
+    log_dir = os.environ.get("CHROMEDRIVER_LOG_DIR", "")
 
-    def logging_service(**kwargs: Any) -> ChromeService:  # noqa: ANN401
-        return ChromeService(service_args=["--verbose", "--append-log"], log_output=str(log_path), **kwargs)
+    def start_session(self: RemoteWebDriver, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+        original_start_session(self, *args, **kwargs)
+        # Only after the session exists, so a slow browser launch keeps the full timeout.
+        if isinstance(self.command_executor, RemoteConnection):
+            self.command_executor.client_config.timeout = DRIVER_COMMAND_TIMEOUT
 
-    monkeypatch.setattr(requestium.requestium_session, "ChromeService", logging_service)
+    def service_init(self: ChromiumService, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+        log_name = re.sub(r"[^\w.-]", "_", os.environ.get("PYTEST_CURRENT_TEST", "outside_test"))
+        log_path = Path(log_dir) / f"{log_name}.log"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        kwargs["service_args"] = [*(kwargs.get("service_args") or ()), "--verbose", "--append-log"]
+        kwargs["log_output"] = str(log_path)
+        original_service_init(self, *args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(RemoteWebDriver, "start_session", start_session)
+        if log_dir:
+            monkeypatch.setattr(ChromiumService, "__init__", service_init)
+        yield
 
 
 def own_chrome_session(*, arguments: Sequence[str] = (), **kwargs: Any) -> requestium.Session:  # noqa: ANN401
