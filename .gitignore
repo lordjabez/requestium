@@ -160,5 +160,5 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# ChromeDriver logs written by the tests when CHROMEDRIVER_LOG_DIR is set
-chromedriver-logs/
+# Driver logs written by the tests when DRIVER_LOG_DIR is set
+driver-logs/

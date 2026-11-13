@@ -9,7 +9,7 @@ from typing import cast
 
 import pytest
 from selenium import webdriver
-from selenium.common.exceptions import NoSuchWindowException, WebDriverException
+from selenium.common.exceptions import InvalidArgumentException, WebDriverException
 
 import requestium.requestium
 from requestium.requestium_mixin import DriverMixin
@@ -72,16 +72,10 @@ def secure_chrome(https_server: LocalServer) -> Generator[DriverMixin, None, Non
 
 
 def test_non_domain_errors_propagate_with_message(chrome: DriverMixin) -> None:
-    main = chrome.current_window_handle
-    chrome.switch_to.new_window("tab")
-    chrome.close()
-    try:
-        # The current window no longer exists: not a domain problem, so the original exception must surface.
-        with pytest.raises(NoSuchWindowException) as excinfo:
-            chrome.try_add_cookie({"name": "bad", "value": "1", "domain": "www.example.com"})
-        assert "no such window" in str(excinfo.value)
-    finally:
-        chrome.switch_to.window(main)
+    # Chrome rejects a cookie without a value outright: not a domain problem, so the original exception must surface.
+    with pytest.raises(InvalidArgumentException) as excinfo:
+        chrome.try_add_cookie({"name": "bad", "domain": "www.example.com"})
+    assert "missing 'value'" in str(excinfo.value)
 
 
 def test_unfixable_cookie_raises_after_retry(chrome: DriverMixin) -> None:

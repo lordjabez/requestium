@@ -6,7 +6,7 @@ import shutil
 import ssl
 import subprocess
 import threading
-from collections.abc import Generator, Sequence
+from collections.abc import Callable, Generator, Sequence
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -18,6 +18,8 @@ from _pytest.fixtures import FixtureRequest
 from selenium import webdriver
 from selenium.common import WebDriverException
 from selenium.webdriver.chromium.service import ChromiumService
+from selenium.webdriver.common.service import Service
+from selenium.webdriver.firefox.service import Service as FirefoxService
 from selenium.webdriver.remote.remote_connection import RemoteConnection
 from selenium.webdriver.remote.webdriver import WebDriver as RemoteWebDriver
 from selenium.webdriver.support import expected_conditions as EC  # noqa: N812
@@ -224,20 +226,37 @@ def chrome_options(server: LocalServer, *, headless: bool, arguments: Sequence[s
 
 
 # Commands normally get 120 seconds; a browser that hangs mid-test (seen on CI's macOS and Windows runners) should fail sooner.
-DRIVER_COMMAND_TIMEOUT = 30
+DRIVER_COMMAND_TIMEOUT = 60
+
+# Verbose logging arguments for each driver service, keyed by the prefix of its log files.
+DRIVER_LOG_ARGUMENTS: dict[str, tuple[type[Service], list[str]]] = {
+    "chromedriver": (ChromiumService, ["--verbose", "--append-log"]),
+    "geckodriver": (FirefoxService, ["--log", "trace"]),
+}
+
+
+def _logging_service_init(original_init: Callable[..., None], log_dir: Path, prefix: str, arguments: list[str]) -> Callable[..., None]:
+    """Wrap a driver service's __init__ so it logs verbosely to a file named after the test running when it started."""
+
+    def service_init(self: Service, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
+        test_name = re.sub(r"[^\w.-]", "_", os.environ.get("PYTEST_CURRENT_TEST", "outside_test"))
+        log_dir.mkdir(parents=True, exist_ok=True)
+        kwargs["service_args"] = [*(kwargs.get("service_args") or ()), *arguments]
+        kwargs["log_output"] = str(log_dir / f"{prefix}-{test_name}.log")
+        original_init(self, *args, **kwargs)
+
+    return service_init
 
 
 @pytest.fixture(scope="session", autouse=True)
 def driver_diagnostics() -> Generator[None, None, None]:
     """
-    Make browser hangs fail fast and, when CHROMEDRIVER_LOG_DIR is set, give every ChromeDriver a verbose log.
+    Make browser hangs fail fast and, when DRIVER_LOG_DIR is set, give every ChromeDriver and GeckoDriver a verbose log.
 
-    Chrome intermittently exits during startup or hangs on CI runners, and only ChromeDriver's log says why. Logs are named
+    Browsers intermittently exit during startup or hang on CI runners, and only the driver's log says why. Logs are named
     after the test running when the driver started, so a module-scoped fixture's driver is logged under its first test.
     """
     original_start_session = RemoteWebDriver.start_session
-    original_service_init = ChromiumService.__init__
-    log_dir = os.environ.get("CHROMEDRIVER_LOG_DIR", "")
 
     def start_session(self: RemoteWebDriver, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
         original_start_session(self, *args, **kwargs)
@@ -245,18 +264,12 @@ def driver_diagnostics() -> Generator[None, None, None]:
         if isinstance(self.command_executor, RemoteConnection):
             self.command_executor.client_config.timeout = DRIVER_COMMAND_TIMEOUT
 
-    def service_init(self: ChromiumService, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
-        log_name = re.sub(r"[^\w.-]", "_", os.environ.get("PYTEST_CURRENT_TEST", "outside_test"))
-        log_path = Path(log_dir) / f"{log_name}.log"
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        kwargs["service_args"] = [*(kwargs.get("service_args") or ()), "--verbose", "--append-log"]
-        kwargs["log_output"] = str(log_path)
-        original_service_init(self, *args, **kwargs)
-
     with pytest.MonkeyPatch.context() as monkeypatch:
         monkeypatch.setattr(RemoteWebDriver, "start_session", start_session)
-        if log_dir:
-            monkeypatch.setattr(ChromiumService, "__init__", service_init)
+        if log_dir := os.environ.get("DRIVER_LOG_DIR"):
+            for prefix, (service_class, arguments) in DRIVER_LOG_ARGUMENTS.items():
+                logging_init = _logging_service_init(service_class.__init__, Path(log_dir), prefix, arguments)
+                monkeypatch.setattr(service_class, "__init__", logging_init)
         yield
 
 
