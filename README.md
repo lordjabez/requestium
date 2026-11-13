@@ -317,4 +317,4 @@ This project intends to be a drop-in replacement of Requests' Session object, wi
 ## License
 Copyright © 2017, [Tryolabs](https://tryolabs.com/). Copyright © 2022-2026, Judson Neer. Released under the [BSD 3-Clause](https://github.com/lordjabez/requestium/blob/main/LICENSE).
 
-Requestium was originally developed as an internal tool at Tryolabs and later released as open source. In 2026, Tryolabs transferred the project to Jud Neer, who maintains it independently. Tryolabs is not responsible for the project or for any release made after the transfer.
+Requestium was originally developed as an internal tool at Tryolabs and later released as open source. In 2026, Tryolabs transferred the project to Judson Neer, who maintains it independently. Tryolabs is not responsible for the project or for any release made after the transfer.
