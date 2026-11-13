@@ -1,5 +1,7 @@
 import contextlib
 import json
+import os
+import re
 import shutil
 import ssl
 import subprocess
@@ -15,10 +17,12 @@ import urllib3.exceptions
 from _pytest.fixtures import FixtureRequest
 from selenium import webdriver
 from selenium.common import WebDriverException
+from selenium.webdriver import ChromeService
 from selenium.webdriver.support import expected_conditions as EC  # noqa: N812
 from selenium.webdriver.support.wait import WebDriverWait
 
 import requestium
+import requestium.requestium_session
 
 if TYPE_CHECKING:
     from requestium.requestium_mixin import DriverMixin
@@ -216,6 +220,26 @@ def chrome_options(server: LocalServer, *, headless: bool, arguments: Sequence[s
     if headless:
         options.add_argument("--headless=new")
     return options
+
+
+@pytest.fixture(autouse=True)
+def chromedriver_log(request: FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    When CHROMEDRIVER_LOG_DIR is set, give every ChromeDriver that requestium starts a verbose log named after the test.
+
+    Chrome intermittently exits during startup on CI's macOS runners ("Chrome instance exited"), and only this log says why.
+    """
+    log_dir = os.environ.get("CHROMEDRIVER_LOG_DIR")
+    if not log_dir:
+        return
+    log_name = re.sub(r"[^\w.-]", "_", request.node.nodeid)
+    log_path = Path(log_dir) / f"{log_name}.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def logging_service(**kwargs: Any) -> ChromeService:  # noqa: ANN401
+        return ChromeService(service_args=["--verbose", "--append-log"], log_output=str(log_path), **kwargs)
+
+    monkeypatch.setattr(requestium.requestium_session, "ChromeService", logging_service)
 
 
 def own_chrome_session(*, arguments: Sequence[str] = (), **kwargs: Any) -> requestium.Session:  # noqa: ANN401

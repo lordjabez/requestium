@@ -68,6 +68,13 @@ jobs:
           # ChromeDriver only supports Chrome version N"); let Selenium Manager resolve a matching driver instead.
           SE_SKIP_DRIVER_IN_PATH: true
           COVERAGE_FILE: .coverage.${{ matrix.os }}.${{ matrix.python-version }}.${{ matrix.resolution }}
+          CHROMEDRIVER_LOG_DIR: chromedriver-logs
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: ${{ failure() }}
+        with:
+          name: chromedriver-logs-${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.resolution }}
+          path: chromedriver-logs
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
